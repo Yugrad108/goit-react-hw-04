@@ -1,48 +1,100 @@
-import { useState, useEffect } from "react";
-import { nanoid } from "nanoid";
-import ContactsForm from "./components/ContactForm/ContactForm";
-import SearchBox from "./components/SearchBox/SearchBox";
-import ContactList from "./components/ContactList/ContactList";
-
-const tempContacts = [
-  { id: "id-1", name: "Rosie Simpson", number: "459-12-56" },
-  { id: "id-2", name: "Hermione Kline", number: "443-89-12" },
-  { id: "id-3", name: "Eden Clements", number: "645-17-79" },
-  { id: "id-4", name: "Annie Copeland", number: "227-91-26" },
-];
+import { useEffect, useState } from "react";
+import SearchBar from "./components/SearchBar/SearchBar";
+import ImageGallery from "./components/ImageGallery/ImageGallery";
+import Loader from "./components/Loader/Loader";
+import ErrorMessage from "./components/ErrorMessage/ErrorMessage";
+import LoadMoreBtn from "./components/LoadMoreBtn/LoadMoreBtn";
+import ImageModal from "./components/ImageModal/ImageModal";
+import { fetchImages } from "./services/api";
+import { Toaster } from "react-hot-toast";
 
 function App() {
-  const [contacts, setContacts] = useState(() => {
-    const savedContacts = localStorage.getItem("savedContacts");
-    return savedContacts ? JSON.parse(savedContacts) : tempContacts;
-  });
-  const [filter, setFilter] = useState("");
+  const [images, setImages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [loadMore, setLoadMore] = useState(false);
+  const [modalIsOpen, setModalIsOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [page, setPage] = useState(1);
+  const [query, setQuery] = useState("");
+  const [totalPages, setTotalPages] = useState(0);
+
+  const handleSearch = async (newQuery) => {
+    setQuery(newQuery);
+    setImages([]);
+    setPage(1);
+    setError("");
+  };
 
   useEffect(() => {
-    localStorage.setItem("savedContacts", JSON.stringify(contacts));
-  }, [contacts]);
+    if (!query) return;
 
-  const addContact = ({ username, number }) => {
-    const newContacts = [...contacts, { id: nanoid(), name: username, number }];
-    setContacts(newContacts);
+    const fetchImagesData = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const data = await fetchImages(query, page);
+
+        if (data.results.length === 0) {
+          setError("Images not found. Try again!");
+        }
+
+        setImages((prevImages) => {
+          return page === 1 ? data.results : [...prevImages, ...data.results];
+        });
+        setLoadMore(data.total > page * 12);
+        setTotalPages(Math.ceil(data.total / 12));
+      } catch (error) {
+        if (error) {
+          setError("Ooops something went wrong!");
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchImagesData();
+  }, [query, page]);
+
+  const loadMoreImages = () => {
+    setPage((prevPage) => prevPage + 1);
   };
 
-  const delContact = (contactId) => {
-    const newContacts = contacts.filter(({ id }) => id !== contactId);
-    setContacts(newContacts);
-  };
+  function openModal(image) {
+    setSelectedImage(image);
+    setModalIsOpen(true);
+  }
 
-  const filteredContacts = contacts?.filter((contact) => {
-    return contact?.name?.toLowerCase().includes(filter.toLowerCase());
-  });
+  function closeModal() {
+    setSelectedImage(null);
+    setModalIsOpen(false);
+  }
 
   return (
     <>
-      <h1>Phonebook</h1>
-      <ContactsForm onAdd={addContact} />
-      <SearchBox value={filter} onChange={setFilter} />
-      <ContactList contacts={filteredContacts} onDel={delContact} />
+      <div>
+        <h1>Gallery</h1>
+        <SearchBar onSearch={handleSearch} />
+        <Toaster position="bottom-right" reverseOrder={false} />
+        {images.length > 0 && (
+          <ImageGallery images={images} openModal={openModal} />
+        )}
+        {loading && <Loader />}
+        {error && <ErrorMessage error={error} />}
+        {loadMore && !loading && (
+          <LoadMoreBtn
+            onClick={loadMoreImages}
+            totalPages={totalPages}
+            page={page}
+          />
+        )}
+        {modalIsOpen && (
+          <ImageModal image={selectedImage} closeModal={closeModal} />
+        )}
+      </div>
     </>
   );
 }
+
 export default App;
