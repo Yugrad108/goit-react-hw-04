@@ -5,7 +5,9 @@ const ImageGallery = ({ images, openModal }) => {
   return (
     <ul className={styles.imageList}>
       {images.map((image) => {
-        console.log(image);
+        {
+          /* console.log(image); */
+        }
         return (
           <ImageCard
             key={image.id}
